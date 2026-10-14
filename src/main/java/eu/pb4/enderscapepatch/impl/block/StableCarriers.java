@@ -19,10 +19,12 @@ import java.util.Map;
  * Blocks that get one of Polymer's stable full block slots, whose client-side state survives the
  * client's own block updates, so breaking or placing next to a stem or End terrain doesn't show
  * other blocks along its column until the server answers. Slots are fixed so the pack never depends
- * on registration order; polymer-patch-bundle holds the others (0-23, 26, 27, 29-31, 40, 44-48).
+ * on registration order; polymer-patch-bundle holds 0-16, 18-20, 22, 23, 26, 27, 29-31, 40, 44, 45
+ * and sensible-storage 17.
  */
 public final class StableCarriers {
     private static final List<Entry> ENTRIES = List.of(
+        entry(21, "enderscape:shadoline_pillar", "axis=y"),
         entry(24, "enderscape:celestial_stem", "axis=y"),
         entry(25, "enderscape:murublight_stem", "axis=y"),
         entry(28, "enderscape:veiled_log", "axis=y"),
@@ -36,7 +38,10 @@ public final class StableCarriers {
         entry(39, "enderscape:kurodite", ""),
         entry(41, "enderscape:celestial_cap", ""),
         entry(42, "enderscape:murublight_cap", ""),
-        entry(43, "enderscape:void_shale", "stress=0")
+        entry(43, "enderscape:void_shale", "stress=0"),
+        entry(46, "enderscape:stripped_murublight_stem", "axis=y"),
+        entry(47, "enderscape:stripped_celestial_stem", "axis=y"),
+        entry(48, "enderscape:stripped_veiled_wood", "axis=y")
     );
     private static final @Nullable MethodHandle REQUEST_STABLE_BLOCK = findRequestStableBlock();
 
