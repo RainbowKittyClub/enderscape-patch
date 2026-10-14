@@ -57,9 +57,7 @@ public record StatePolymerBlock(Map<BlockState, BlockState> map, FactoryBlock fa
             for (var state : block.getStateDefinition().getPossibleStates()) {
                 for (var pair : list) {
                     if (pair.getFirst().test(state) && canUseBlock.test(state)) {
-                        map.put(state, cache.computeIfAbsent(pair.getSecond(), c -> PolymerBlockResourceUtils.requestBlock(
-                                type,
-                                c.stream().map(x -> new PolymerBlockModel(x.model(), x.x(), x.y(), x.uvlock(), x.weigth())).toArray(PolymerBlockModel[]::new))));
+                        map.put(state, cache.computeIfAbsent(pair.getSecond(), c -> request(type, c)));
                         break;
                     }
                 }
@@ -70,6 +68,17 @@ public record StatePolymerBlock(Map<BlockState, BlockState> map, FactoryBlock fa
         } catch (Throwable e) {
             return null;
         }
+    }
+
+    private static @Nullable BlockState request(BlockModelType type, List<StateModelVariant> variants) {
+        var model = variants.stream().map(x -> new PolymerBlockModel(x.model(), x.x(), x.y(), x.uvlock(), x.weigth())).toArray(PolymerBlockModel[]::new);
+        if (type == BlockModelType.FULL_BLOCK) {
+            var clustered = ClusteredCarriers.request(variants, model);
+            if (clustered != null) {
+                return clustered;
+            }
+        }
+        return PolymerBlockResourceUtils.requestBlock(type, model);
     }
 
     @Override
