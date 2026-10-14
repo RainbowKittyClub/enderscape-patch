@@ -38,7 +38,7 @@ public abstract class RubblemiteMixin extends LivingEntity {
             if (model != null && model.holder() instanceof SimpleEntityModel<?> entityModel) {
                 //noinspection unchecked
                 ((SimpleEntityModel<Rubblemite>) entityModel).setModel(
-                        (PolyModelInstance<EntityModel<Rubblemite>>) (Object) EntityModels.RUBBLEMITE.get(this.getEntityData().get(DATA_VARIANT_ID).unwrapKey().orElseThrow())
+                        (PolyModelInstance<EntityModel<Rubblemite>>) (Object) EntityModels.rubblemite(this.getEntityData().get(DATA_VARIANT_ID))
                 );
             }
         }

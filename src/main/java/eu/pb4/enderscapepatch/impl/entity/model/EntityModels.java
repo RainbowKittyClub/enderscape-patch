@@ -10,6 +10,7 @@ import eu.pb4.factorytools.api.virtualentity.emuvanilla.model.LayerDefinition;
 import eu.pb4.factorytools.api.virtualentity.emuvanilla.model.ModelPart;
 import net.penumbra.enderscape.Enderscape;
 import net.penumbra.enderscape.entity.rubblemite.RubblemiteVariant;
+import net.minecraft.core.Holder;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.Util;
@@ -18,10 +19,12 @@ import net.penumbra.enderscape.registry.entity.EnderscapeEntities;
 import net.penumbra.enderscape.registry.entity.EnderscapeRubblemiteVariants;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
 public interface EntityModels {
-    List<PolyModelInstance<?>> ALL = new ArrayList<>();
+    List<PolyModelInstance<?>> ALL = new CopyOnWriteArrayList<>();
     PolyModelInstance<DrifterModel> DRIFTER = create(DrifterModel::new, DrifterModel.createDrifterLayer(), Enderscape.id("entity/drifter/drifter"));
     PolyModelInstance<DrifterModel> DRIFTER_WITH_JELLY = withTexture(DRIFTER, Enderscape.id("entity/drifter/drifter_with_jelly"));
     PolyModelInstance<DrifterModel> DRIFTLET = create(DrifterModel::new, DrifterModel.createDriftletLayer(), Enderscape.id("entity/drifter/driftlet"));
@@ -33,6 +36,8 @@ public interface EntityModels {
             m.put(variant, withTexture(instance, variant.identifier().withPrefix("entity/rubblemite/rubblemite_")));
         }
     });
+    // Datapack variants, one instance per texture
+    Map<Identifier, PolyModelInstance<RubblemiteModel>> RUBBLEMITE_BY_TEXTURE = new ConcurrentHashMap<>();
     PolyModelInstance<RustleModel> RUSTLE = create(RustleModel::new, RustleModel.createLayer(), Enderscape.id("entity/rustle/rustle"));
     PolyModelInstance<BabyRustleModel> BABY_RUSTLE = create(BabyRustleModel::new, BabyRustleModel.createLayer(), Enderscape.id("entity/rustle/rustle_baby"));
 
@@ -43,6 +48,16 @@ public interface EntityModels {
         m.put(EnderscapeEntities.RUSTLE, EntityModels.RUSTLE);
         return m;
     });
+
+    static PolyModelInstance<RubblemiteModel> rubblemite(Holder<RubblemiteVariant> variant) {
+        var builtIn = variant.unwrapKey().map(RUBBLEMITE::get).orElse(null);
+        return builtIn != null ? builtIn : rubblemite(variant.value());
+    }
+
+    static PolyModelInstance<RubblemiteModel> rubblemite(RubblemiteVariant variant) {
+        return RUBBLEMITE_BY_TEXTURE.computeIfAbsent(variant.assetInfo().asset().id(),
+                texture -> withTexture(RUBBLEMITE.get(EnderscapeRubblemiteVariants.DEFAULT), texture));
+    }
 
     static <T extends EntityModel<?>> PolyModelInstance<T> create(Function<ModelPart, T> modelCreator, LayerDefinition data, Identifier texture) {
         var instance = PolyModelInstance.create(modelCreator, data, texture);

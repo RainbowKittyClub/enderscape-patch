@@ -1,11 +1,13 @@
 package eu.pb4.enderscapepatch.impl;
 
+import eu.pb4.enderscapepatch.impl.entity.model.EntityModels;
 import eu.pb4.enderscapepatch.impl.res.ResourcePackGenerator;
 import eu.pb4.polymer.blocks.api.BlockModelType;
 import eu.pb4.polymer.blocks.api.PolymerBlockResourceUtils;
 import eu.pb4.polymer.core.api.item.PolymerItemUtils;
 import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
 import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
+import eu.pb4.polymer.resourcepack.api.ResourcePackBuilder;
 import eu.pb4.polymer.resourcepack.extras.api.ResourcePackExtras;
 import eu.pb4.polymer.resourcepack.extras.api.format.item.ItemAsset;
 import eu.pb4.polymer.resourcepack.extras.api.format.item.model.BasicItemModel;
@@ -16,17 +18,20 @@ import it.unimi.dsi.fastutil.objects.Reference2IntMap;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.registry.DynamicRegistrySetupCallback;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeBookCategories;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluids;
 import net.penumbra.enderscape.item.crafting.RustleRecipe;
 import net.penumbra.enderscape.item.crafting.VoidLachrymaRecipe;
+import net.penumbra.enderscape.registry.EnderscapeRegistries;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongepowered.asm.mixin.MixinEnvironment;
@@ -34,6 +39,7 @@ import org.spongepowered.asm.mixin.MixinEnvironment;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.BiFunction;
 
 import static net.minecraft.commands.Commands.literal;
 
@@ -48,6 +54,9 @@ public class EnderscapePolymerPatch implements ModInitializer {
     public static final Identifier RESPAWN_ACTION = EnderscapePolymerPatch.id("respawn");
     public static final Identifier DISCONNECT_ACTION = EnderscapePolymerPatch.id("disconnect");
 
+    private static final BiFunction<Identifier, ResourcePackBuilder, ItemAsset> ENTITY_MODEL_BRIDGE = (id, b) ->
+            new ItemAsset(new BasicItemModel(id, List.of(new MapColorTintSource(0xFFFFFF))), new ItemAsset.Properties(true, true));
+
     @Override
     public void onInitialize() {
         //MixinEnvironment.getCurrentEnvironment().audit();
@@ -59,9 +68,14 @@ public class EnderscapePolymerPatch implements ModInitializer {
                 Identifier.fromNamespaceAndPath("enderscape-patch", "block"),
                 Identifier.fromNamespaceAndPath("enderscape", "block_sign")
         );
-        ResourcePackExtras.forDefault().addBridgedModelsFolder(Identifier.fromNamespaceAndPath("enderscape", "entity"), (id, b) -> {
-            return new ItemAsset(new BasicItemModel(id, List.of(new MapColorTintSource(0xFFFFFF))), new ItemAsset.Properties(true, true));
-        });
+        ResourcePackExtras.forDefault().addBridgedModelsFolder(Identifier.fromNamespaceAndPath("enderscape", "entity"), ENTITY_MODEL_BRIDGE);
+
+        // Datapack variants load before the pack is built; give each one models and a bridge.
+        DynamicRegistrySetupCallback.EVENT.register(registries -> registries.registerEntryAdded(EnderscapeRegistries.RUBBLEMITE_VARIANT, (rawId, id, variant) -> {
+            if (!EntityModels.RUBBLEMITE.containsKey(ResourceKey.create(EnderscapeRegistries.RUBBLEMITE_VARIANT, id))) {
+                ResourcePackExtras.forDefault().addBridgedModelsFolder(EntityModels.rubblemite(variant).texture(), ENTITY_MODEL_BRIDGE);
+            }
+        }));
 
         ResourcePackGenerator.setup();
 
