@@ -195,7 +195,9 @@ public class ResourcePackGenerator {
                 return PackResource.fromAsset(new ItemAsset(replacer[0].modifyDeep(EmptyItemModel.INSTANCE, asset.model()), asset.properties()));
             }
 
-            if (string.equals("assets/enderscape/items/rubble_shield.json")) {
+            // Also catches datapack shields (Rubble Colony) whose item definitions select on the variant
+            if (string.startsWith("assets/") && string.contains("/items/") && string.endsWith(".json")
+                    && Objects.requireNonNull(resource.asString()).contains("\"enderscape:rubble_shield_variant\"")) {
                 var asset = ItemAsset.fromJson(Objects.requireNonNull(resource.asString()));
                 var replacer = new ItemModel.Replacer[]{null};
                 replacer[0] = (parent, model) -> {
