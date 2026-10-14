@@ -116,15 +116,15 @@ public class ResourcePackGenerator {
         }*/
 
         builder.forEachResource((string, resource) -> {
-            for (var expandable : EXPANDABLE) {
-                if (string.contains(expandable) && string.startsWith("assets/enderscape/models/block/")) {
-                    var asset = ModelAsset.fromJson(Objects.requireNonNull(resource.asString()));
-                    if (asset.parent().isPresent()) {
-                        var parentId = asset.parent().get();
-                        var parentAsset = ModelAsset.fromJson(new String(Objects.requireNonNull(builder.getDataOrSource(AssetPaths.model(parentId) + ".json")), StandardCharsets.UTF_8));
-                        builder.addData(AssetPaths.model("enderscape-patch", parentId.getPath()) + ".json",
-                                ModelModifiers.expandModel(parentAsset, expandable.contains("sign") ? expansionSign : expansion));
-                    }
+            // Wall signs match both "wall" and "sign", and Set.of iterates in a per-run order, so pick
+            // one expansion per model rather than letting the last matching key win.
+            if (string.startsWith("assets/enderscape/models/block/") && EXPANDABLE.stream().anyMatch(string::contains)) {
+                var asset = ModelAsset.fromJson(Objects.requireNonNull(resource.asString()));
+                if (asset.parent().isPresent()) {
+                    var parentId = asset.parent().get();
+                    var parentAsset = ModelAsset.fromJson(new String(Objects.requireNonNull(builder.getDataOrSource(AssetPaths.model(parentId) + ".json")), StandardCharsets.UTF_8));
+                    builder.addData(AssetPaths.model("enderscape-patch", parentId.getPath()) + ".json",
+                            ModelModifiers.expandModel(parentAsset, string.contains("sign") ? expansionSign : expansion));
                 }
             }
         });
