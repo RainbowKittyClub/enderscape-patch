@@ -2,8 +2,6 @@ package eu.pb4.enderscapepatch.impl.block;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -23,13 +21,10 @@ final class CarrierHost implements CarrierColours.Assets {
     // This copy's instruments in an ordinary group.
     static final Set<String> INSTRUMENTS = CarrierTiers.ENDERSCAPE_INSTRUMENTS;
 
-    // The vanilla client jar, for vanilla parent models and textures; opened on first use.
-    private static @Nullable FileSystem vanilla;
-
     // Each namespace's asset directories, from every mod that ships some.
     private final Map<String, List<Path>> roots = new HashMap<>();
 
-    // An asset from the mods that ship its namespace, else the vanilla client jar.
+    // An asset from the mods that ship its namespace, else Polymer's copy of the client jar.
     @Override
     public @Nullable InputStream open(String namespace, String path) throws IOException {
         for (Path root : this.roots.computeIfAbsent(namespace, CarrierHost::roots)) {
@@ -38,11 +33,9 @@ final class CarrierHost implements CarrierColours.Assets {
                 return Files.newInputStream(file);
             }
         }
-        if (vanilla == null) {
-            vanilla = FileSystems.newFileSystem(PolymerCommonUtils.getClientJar());
-        }
-        Path file = vanilla.getPath("/assets/" + namespace + "/" + path);
-        return Files.exists(file) ? Files.newInputStream(file) : null;
+        Path vanilla = PolymerCommonUtils.getClientJarRoot();
+        Path file = vanilla == null ? null : vanilla.resolve("assets/" + namespace + "/" + path);
+        return file != null && Files.exists(file) ? Files.newInputStream(file) : null;
     }
 
     // Each mod's assets/<namespace> directory, in the loader's mod order.

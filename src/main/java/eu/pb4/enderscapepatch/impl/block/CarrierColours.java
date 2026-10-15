@@ -44,6 +44,12 @@ final class CarrierColours {
     private final Assets assets;
     // Model JSON by id; empty when missing.
     private final Map<String, Optional<JsonObject>> models = new HashMap<>();
+    // A blockstate's variants by block id; empty when missing or multipart.
+    private final Map<String, Optional<JsonObject>> blockstates = new HashMap<>();
+    // Per-direction colours by model id; empty when the model has no texture.
+    private final Map<String, Optional<double[][]>> faces = new HashMap<>();
+    // Decoded textures by id; empty when missing or unreadable.
+    private final Map<String, Optional<BufferedImage>> images = new HashMap<>();
     // {L, a, b, mean alpha} by texture id, uv and tint; empty when missing.
     private final Map<String, Optional<double[]>> textures = new HashMap<>();
 
@@ -56,6 +62,7 @@ final class CarrierColours {
     // Registers a model that only exists once the pack is built, so its colour is known before.
     void define(String id, JsonObject model) {
         this.models.put(normalize(id), Optional.of(model));
+        this.faces.remove(normalize(id));
     }
 
     // The colour of a variant list, each model's averaged by weight; null when none has a texture.
@@ -134,14 +141,19 @@ final class CarrierColours {
 
     // The colour of a block's first blockstate variant whose key has every property, or null.
     double @Nullable [] blockstateLab(String block, List<String> properties) {
-        int colon = block.indexOf(':');
-        String path = "blockstates/" + block.substring(colon + 1) + ".json";
-        try (InputStream in = this.assets.open(block.substring(0, colon), path)) {
-            JsonObject variants = in == null ? null : JsonParser.parseReader(new InputStreamReader(
-                    in, StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("variants");
-            if (variants == null) {
-                return null;
+        JsonObject variants = this.blockstates.computeIfAbsent(block, key -> {
+            try (InputStream in = open(key, "blockstates", ".json")) {
+                return in == null ? Optional.empty() : Optional.ofNullable(JsonParser.parseReader(
+                        new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject()
+                        .getAsJsonObject("variants"));
+            } catch (Exception e) {
+                return Optional.empty();
             }
+        }).orElse(null);
+        if (variants == null) {
+            return null;
+        }
+        try {
             for (var entry : variants.entrySet()) {
                 if (List.of(entry.getKey().split(",")).containsAll(properties)) {
                     return lab(blockstateVariants(entry.getValue()));
@@ -248,8 +260,14 @@ final class CarrierColours {
         return new Resolved(textureMap, elements);
     }
 
-    // Per-direction colours of one model, or null when it has no texture.
+    // Per-direction colours of one model, or null when it has no texture; cached.
     private double @Nullable [][] faces(String model) {
+        return this.faces.computeIfAbsent(normalize(model),
+                key -> Optional.ofNullable(modelFaces(key))).orElse(null);
+    }
+
+    // Per-direction colours of one model, or null when it has no texture.
+    private double @Nullable [][] modelFaces(String model) {
         Resolved resolved = resolve(model);
         double[][] faces = new double[6][];
         if (resolved.elements() == null) {
@@ -385,17 +403,35 @@ final class CarrierColours {
         if (id == null) {
             return null;
         }
-        String area = uv == null ? "" : uv[0] + "," + uv[1] + "," + uv[2] + "," + uv[3];
-        String key = normalize(id) + "|" + area + "|" + tinted;
+        double[] area = whole(uv) ? null : uv;
+        String key = normalize(id) + "|" + (area == null ? ""
+                : area[0] + "," + area[1] + "," + area[2] + "," + area[3]) + "|" + tinted;
         return this.textures.computeIfAbsent(key, k -> {
-            try (InputStream in = open(normalize(id), "textures", ".png")) {
-                BufferedImage image = in == null ? null : ImageIO.read(in);
+            try {
+                BufferedImage image = image(normalize(id));
                 return image == null ? Optional.empty()
-                        : Optional.ofNullable(stats(image, uv, tinted));
+                        : Optional.ofNullable(stats(image, area, tinted));
             } catch (Exception e) {
                 return Optional.empty();
             }
         }).orElse(null);
+    }
+
+    // A texture decoded once, or null when missing or unreadable.
+    private @Nullable BufferedImage image(String id) {
+        return this.images.computeIfAbsent(id, key -> {
+            try (InputStream in = open(key, "textures", ".png")) {
+                return in == null ? Optional.empty() : Optional.ofNullable(ImageIO.read(in));
+            } catch (Exception e) {
+                return Optional.empty();
+            }
+        }).orElse(null);
+    }
+
+    // Whether a face uv covers the whole texture, which reads the same as no uv.
+    private static boolean whole(double @Nullable [] uv) {
+        return uv != null && Math.min(uv[0], uv[2]) == 0 && Math.max(uv[0], uv[2]) == 16
+                && Math.min(uv[1], uv[3]) == 0 && Math.max(uv[1], uv[3]) == 16;
     }
 
     // Mean CIELAB of the image's opaque pixels and its mean alpha, within uv when given.

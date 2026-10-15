@@ -4,6 +4,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -17,6 +18,7 @@ import eu.pb4.polymer.blocks.api.MultiPolymerBlockModel;
 import eu.pb4.polymer.blocks.api.PolymerBlockModel;
 import eu.pb4.polymer.blocks.api.PolymerBlockResourceUtils;
 import eu.pb4.polymer.resourcepack.extras.api.format.model.ModelAsset;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,10 +60,14 @@ public final class Carriers {
     private static final @Nullable MethodHandle BY_PREDICATE_MULTI = find("requestBlock",
             BlockModelType.class, Predicate.class, MultiPolymerBlockModel.class);
 
-    // Model colours; built on first use.
+    // Groups with none of their instruments for this copy left; a taken state never frees.
+    private static final BitSet FULL_GROUPS = new BitSet();
+    // Model colours; built on first use, dropped as the server starts.
     private static @Nullable CarrierColours colours;
-    // Each slot block's colour; built with colours.
+    // Each slot block's colour; built and dropped with colours.
     private static double @Nullable [][] slotColours;
+    // Whether the drop at server start is registered.
+    private static boolean releasing;
 
     // Static-only; blocks instantiation.
     private Carriers() {}
@@ -87,7 +93,7 @@ public final class Carriers {
             }
             LOGGER.warn("Stable slot {} for {} is taken", slot, block);
         }
-        if (BY_PREDICATE != null) {
+        if (BY_PREDICATE != null && hasRoom(anchor)) {
             BlockState state = clustered(colours().lab(variants(model)), anchor,
                     byPredicate(model));
             if (state != null) {
@@ -117,7 +123,7 @@ public final class Carriers {
             }
             LOGGER.warn("Stable slot {} for {} is taken", slot, block);
         }
-        if (BY_PREDICATE_MULTI != null) {
+        if (BY_PREDICATE_MULTI != null && hasRoom(anchor)) {
             BlockState state = clustered(colours().partsLab(partVariants(model.models())),
                     anchor, byPredicate(model));
             if (state != null) {
@@ -170,6 +176,17 @@ public final class Carriers {
                 BlockModelType.FULL_BLOCK, predicate, model));
     }
 
+    // Whether a group this anchor type may use still has a free instrument.
+    private static boolean hasRoom(String anchor) {
+        for (int slot = 0; slot < CarrierTiers.SLOTS.size(); slot++) {
+            CarrierTiers.Slot entry = CarrierTiers.SLOTS.get(slot);
+            if (!FULL_GROUPS.get(slot) && (!entry.isAnchor() || entry.anchor().equals(anchor))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // The anchor groups of the type first, then the ordinary ones, each nearest colour first.
     private static @Nullable BlockState clustered(double @Nullable [] lab, String anchor,
             PredicateRequest request) {
@@ -184,21 +201,26 @@ public final class Carriers {
                 request);
     }
 
-    // The first group by colour, among those the filter accepts, with a free instrument of ours.
+    // The first group by colour, among those the filter accepts, with a free instrument of ours;
+    // a group found without one while Polymer had states left is marked full.
     private static @Nullable BlockState nearest(double[] lab, IntPredicate groups,
             Set<String> instruments, PredicateRequest request) {
         double[][] slotLabs = slotColours();
+        double[] distance = new double[slotLabs.length];
         List<Integer> order = new ArrayList<>();
         for (int slot = 0; slot < slotLabs.length; slot++) {
-            if (groups.test(slot)) {
+            if (groups.test(slot) && !FULL_GROUPS.get(slot)) {
+                distance[slot] = CarrierColours.ciede2000(lab, slotLabs[slot]);
                 order.add(slot);
             }
         }
-        order.sort(Comparator.<Integer>comparingDouble(slot ->
-                CarrierColours.ciede2000(lab, slotLabs[slot])).thenComparingInt(slot -> slot));
+        order.sort(Comparator.<Integer>comparingDouble(slot -> distance[slot])
+                .thenComparingInt(slot -> slot));
         for (int slot : order) {
             int note = CarrierTiers.note(slot);
             boolean powered = CarrierTiers.powered(slot);
+            boolean polymerHasRoom =
+                    PolymerBlockResourceUtils.getBlocksLeft(BlockModelType.FULL_BLOCK) > 0;
             BlockState state = request.request(candidate -> candidate.is(Blocks.NOTE_BLOCK)
                     && candidate.getValue(NoteBlock.NOTE) == note
                     && candidate.getValue(NoteBlock.POWERED) == powered
@@ -207,16 +229,29 @@ public final class Carriers {
             if (state != null) {
                 return state;
             }
+            if (polymerHasRoom) {
+                FULL_GROUPS.set(slot);
+            }
         }
         return null;
     }
 
-    // The colour source, built on first use.
+    // The colour source, built on first use; blocks register before the server starts.
     private static CarrierColours colours() {
         if (colours == null) {
             colours = new CarrierColours(new CarrierHost());
+            if (!releasing) {
+                releasing = true;
+                ServerLifecycleEvents.SERVER_STARTING.register(server -> release());
+            }
         }
         return colours;
+    }
+
+    // Drops the colour caches; a later request rebuilds them.
+    private static synchronized void release() {
+        colours = null;
+        slotColours = null;
     }
 
     // Each slot block's colour, from its own blockstate; a plain note block when it can't be read.
