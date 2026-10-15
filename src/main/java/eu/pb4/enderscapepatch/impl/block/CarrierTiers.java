@@ -13,8 +13,13 @@ import java.util.Set;
  * from {@code CarrierHost}. Each group has 24 free instruments: {@code snare} for normal requests,
  * {@code hat} to {@code guitar} for kalic0re, {@code chime} to {@code trumpet_oxidized} for
  * polymer-patch-bundle and {@code trumpet_weathered} to {@code custom_head} for
- * enderscape-polymer-patch, so no copy depends on another's load order. A group whose slot
- * anchors a type belongs wholly to kalic0re's blocks of that type, {@code snare} included.
+ * enderscape-polymer-patch, so no copy depends on another's load order for those.
+ *
+ * <p>kalic0re's blocks of an anchor type also take their group's {@code snare}, but only while it
+ * is free. Polymer gives normal requests the {@code snare} states group by group, 48 first and
+ * then 0, 1, 2 and on, so the 19th normal request made before the bookshelves register takes the
+ * bookshelf group's. The Polymer fork warns only once normal requests have used every
+ * {@code snare} state.
  */
 public final class CarrierTiers {
 
