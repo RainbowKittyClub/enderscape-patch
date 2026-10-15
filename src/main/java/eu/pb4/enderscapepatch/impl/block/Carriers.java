@@ -201,8 +201,7 @@ public final class Carriers {
                 request);
     }
 
-    // The first group by colour, among those the filter accepts, with a free instrument of ours;
-    // a group found without one while Polymer had states left is marked full.
+    // The first group by colour that the filter accepts and that has a free instrument of ours.
     private static @Nullable BlockState nearest(double[] lab, IntPredicate groups,
             Set<String> instruments, PredicateRequest request) {
         double[][] slotLabs = slotColours();
@@ -219,6 +218,7 @@ public final class Carriers {
         for (int slot : order) {
             int note = CarrierTiers.note(slot);
             boolean powered = CarrierTiers.powered(slot);
+            // The public count already leaves out the state Polymer keeps for an empty request.
             boolean polymerHasRoom =
                     PolymerBlockResourceUtils.getBlocksLeft(BlockModelType.FULL_BLOCK) > 0;
             BlockState state = request.request(candidate -> candidate.is(Blocks.NOTE_BLOCK)
@@ -230,6 +230,7 @@ public final class Carriers {
                 return state;
             }
             if (polymerHasRoom) {
+                // Polymer had states left, so none of ours is; taken states never free.
                 FULL_GROUPS.set(slot);
             }
         }
