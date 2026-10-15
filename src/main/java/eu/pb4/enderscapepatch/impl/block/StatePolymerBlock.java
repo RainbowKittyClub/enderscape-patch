@@ -16,6 +16,7 @@ import eu.pb4.polymer.virtualentity.api.ElementHolder;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -57,26 +58,18 @@ public record StatePolymerBlock(Map<BlockState, BlockState> map, FactoryBlock fa
             // Stable slots first, so a state sharing its models with one never takes a normal state
             if (type == BlockModelType.FULL_BLOCK) {
                 for (var state : block.getStateDefinition().getPossibleStates()) {
-                    for (var pair : list) {
-                        if (pair.getFirst().test(state) && canUseBlock.test(state)) {
-                            if (!cache.containsKey(pair.getSecond())) {
-                                var stable = StableCarriers.request(id, state, toModels(pair.getSecond()));
-                                if (stable != null) {
-                                    cache.put(pair.getSecond(), stable);
-                                }
-                            }
-                            break;
-                        }
+                    var properties = Carriers.properties(state);
+                    var variants = Carriers.holdsStableSlot(id, properties) ? match(list, state, canUseBlock) : null;
+                    if (variants != null) {
+                        cache.computeIfAbsent(variants, c -> request(type, id, properties, c));
                     }
                 }
             }
 
             for (var state : block.getStateDefinition().getPossibleStates()) {
-                for (var pair : list) {
-                    if (pair.getFirst().test(state) && canUseBlock.test(state)) {
-                        map.put(state, cache.computeIfAbsent(pair.getSecond(), c -> request(type, c)));
-                        break;
-                    }
+                var variants = match(list, state, canUseBlock);
+                if (variants != null) {
+                    map.put(state, cache.computeIfAbsent(variants, c -> request(type, id, Carriers.properties(state), c)));
                 }
             }
 
@@ -87,19 +80,25 @@ public record StatePolymerBlock(Map<BlockState, BlockState> map, FactoryBlock fa
         }
     }
 
-    private static PolymerBlockModel[] toModels(List<StateModelVariant> variants) {
-        return variants.stream().map(x -> new PolymerBlockModel(x.model(), x.x(), x.y(), x.uvlock(), x.weigth())).toArray(PolymerBlockModel[]::new);
-    }
-
-    private static @Nullable BlockState request(BlockModelType type, List<StateModelVariant> variants) {
-        var model = toModels(variants);
-        if (type == BlockModelType.FULL_BLOCK) {
-            var clustered = ClusteredCarriers.request(variants, model);
-            if (clustered != null) {
-                return clustered;
+    // The models of the first variant matching this state, or null when it has none or can't use one
+    private static @Nullable List<StateModelVariant> match(List<Pair<BlockStatePredicate, List<StateModelVariant>>> list, BlockState state, Predicate<BlockState> canUseBlock) {
+        if (!canUseBlock.test(state)) {
+            return null;
+        }
+        for (var pair : list) {
+            if (pair.getFirst().test(state)) {
+                return pair.getSecond();
             }
         }
-        return PolymerBlockResourceUtils.requestBlock(type, model);
+        return null;
+    }
+
+    // A state drawn with these variants; full blocks go through Carriers
+    private static @Nullable BlockState request(BlockModelType type, Identifier id, String properties, List<StateModelVariant> variants) {
+        var models = variants.stream().map(x -> new PolymerBlockModel(x.model(), x.x(), x.y(), x.uvlock(), x.weigth())).toArray(PolymerBlockModel[]::new);
+        return type == BlockModelType.FULL_BLOCK
+                ? Carriers.request(id, properties, "", models)
+                : PolymerBlockResourceUtils.requestBlock(type, models);
     }
 
     @Override
