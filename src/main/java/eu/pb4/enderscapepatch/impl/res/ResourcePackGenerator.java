@@ -115,6 +115,9 @@ public class ResourcePackGenerator {
             }
         }*/
 
+        // Children share a few parents, and the walk only writes enderscape-patch models, which no
+        // parent read here is, so each parent and expansion is computed once.
+        var expandedParents = new HashMap<Map.Entry<Identifier, Boolean>, ModelAsset>();
         builder.forEachResource((string, resource) -> {
             // Wall signs match both "wall" and "sign", and Set.of iterates in a per-run order, so pick
             // one expansion per model rather than letting the last matching key win.
@@ -122,9 +125,11 @@ public class ResourcePackGenerator {
                 var asset = ModelAsset.fromJson(Objects.requireNonNull(resource.asString()));
                 if (asset.parent().isPresent()) {
                     var parentId = asset.parent().get();
-                    var parentAsset = ModelAsset.fromJson(new String(Objects.requireNonNull(builder.getDataOrSource(AssetPaths.model(parentId) + ".json")), StandardCharsets.UTF_8));
                     builder.addData(AssetPaths.model("enderscape-patch", parentId.getPath()) + ".json",
-                            ModelModifiers.expandModel(parentAsset, string.contains("sign") ? expansionSign : expansion));
+                            expandedParents.computeIfAbsent(Map.entry(parentId, string.contains("sign")), key -> {
+                                var parentAsset = ModelAsset.fromJson(new String(Objects.requireNonNull(builder.getDataOrSource(AssetPaths.model(key.getKey()) + ".json")), StandardCharsets.UTF_8));
+                                return ModelModifiers.expandModel(parentAsset, key.getValue() ? expansionSign : expansion);
+                            }));
                 }
             }
         });
