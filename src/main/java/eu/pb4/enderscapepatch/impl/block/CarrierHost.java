@@ -14,8 +14,7 @@ import eu.pb4.polymer.common.api.PolymerCommonUtils;
 import net.fabricmc.loader.api.FabricLoader;
 import org.jspecify.annotations.Nullable;
 
-// The one file of this package that differs between its three copies: the copy's instruments and
-// where it reads models, blockstates and textures.
+// This copy's instruments and asset source, the one file that differs between the three copies.
 final class CarrierHost implements CarrierColours.Assets {
 
     // This copy's instruments in an ordinary group.

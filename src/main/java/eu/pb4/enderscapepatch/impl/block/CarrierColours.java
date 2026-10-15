@@ -18,8 +18,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.jspecify.annotations.Nullable;
 
-// A block model's colour in CIELAB, the mean of its face textures weighted by face area and by how
-// much of each face a player sees, and CIEDE2000 between two colours.
+// A block model's CIELAB colour, its faces weighted by area and visibility, and CIEDE2000.
 final class CarrierColours {
 
     // Opens assets/<namespace>/<path> (path such as models/block/stone.json), or null when missing.
