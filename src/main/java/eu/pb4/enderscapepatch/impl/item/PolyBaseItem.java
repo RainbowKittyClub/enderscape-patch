@@ -23,8 +23,12 @@ import java.util.List;
 import java.util.Objects;
 
 public record PolyBaseItem(Item item) implements PolymerItem {
+    // A block item takes RKC Polymer's stand-in policy when present; anything else, or stock Polymer, the trial key.
     @Override
     public Item getPolymerItem(ItemStack itemStack, PacketContext packetContext) {
+        if (item instanceof BlockItem blockItem && StandInItems.available()) {
+            return StandInItems.item(blockItem, packetContext);
+        }
         return item instanceof ShieldItem ? Items.SHIELD : Items.TRIAL_KEY;
     }
 
@@ -60,10 +64,14 @@ public record PolyBaseItem(Item item) implements PolymerItem {
         if (!bools.isEmpty() || !strings.isEmpty()) {
             out.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(), bools, strings, List.of()));
         }
+        if (item instanceof BlockItem blockItem) {
+            StandInItems.pin(out, blockItem, context);
+        }
     }
 
     @Override
     public boolean isIgnoringBlockInteractionPlaySoundExceptedEntity(BlockState state, ServerPlayer player, InteractionHand hand, ItemStack stack, ServerLevel world, BlockHitResult blockHitResult) {
-        return item instanceof BlockItem;
+        // With the policy the place sound follows the client item; the lift would double every other sound.
+        return item instanceof BlockItem && !StandInItems.available();
     }
 }
